@@ -15,7 +15,7 @@ Options = {
 ```
 
 
-Use:
+Usage:
 ```html
 <script type="text/javascript" src="riojawall.js"></script>
 <script type="text/javascript">
