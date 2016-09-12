@@ -16,6 +16,7 @@
     marginY: 0,
     shareItems: true,
     responsive: true,
+    justImages: true,
     breakpoints: [
     	{maxWidth: 480, 	cols: 1},
     	{maxWidth: 860, 	cols: 2},
@@ -51,15 +52,30 @@
     $wall.allImages = $wall.container.find('img');
     $wall.loadedImages = 0;
     $wall.initCols = options.cols;
+    $wall.resizeTimeout;
 
     $wall.init = function(){
       $wall.container.css('position','relative');
-
       $wall.updateWidth();
       $wall.loadCols();
       $wall.updateHeight();
-      $wall.equalizeItems();
-      $wall.binImages();
+      if($wall.items.length > ($wall.cols.length * 2) ){
+        $wall.equalizeItems();
+      }
+      $wall.bindImages();
+    }
+
+    $wall.destroy = function(){
+      $.each($wall.cols,function(i,col){
+        col.items.each(function(i,item){
+          item.element.css({
+            position: 'static',
+            width: '',
+            left: '',
+            top: ''
+          })
+        })
+      })
     }
 
     $wall.loadCols = function(){
@@ -75,7 +91,6 @@
     $wall.updateWidth = function(){
       if(options.responsive){
       	var breakpoint = options.breakpoints.filter(function(breakpoint,index,arr){ return breakpoint.maxWidth >= window.innerWidth })[0]
-      	console.log(breakpoint)
       	if(breakpoint != undefined){
       		options.cols = breakpoint.cols;
       	} else {
@@ -102,28 +117,44 @@
     $wall.equalizeItems = function(){
       var highestToShortest = $wall.cols.concat().sort(function(a, b){ return a.height < b.height })
       $.each(highestToShortest,function(i,col){
-      	while((col.height - col.getLastItem().element.height()) > ($wall.getShortestCol().height) ){
-      		$wall.getShortestCol().appendItem(col.popItem())
-      	}
+        var lastItem = col.getLastItem();
+        while((col.height - lastItem.element.height()) > ($wall.getShortestCol().height) ){
+          $wall.getShortestCol().appendItem(col.popItem())
+        }
       })
     }
 
-    $wall.binImages = function(){
+    $wall.bindImages = function(){
 	    $.each($wall.cols,function(i,col){
 		    col.items.each(function(i,item){
-		      item.element.find('img').on('load',function(){
-		      	col.arrangeItems()
-			      $wall.loadedImages++;
-			      if($wall.loadedImages == $wall.allImages.length && options.shareItems){
-			      	$wall.updateHeight();
-			      	$wall.equalizeItems();
-			    	}
-		      })
+          var img = item.element.find('img');
+		      $(img).load(function(){
+			      $wall.updateHeight();
+            col.arrangeItems()
+		      }).each(function() {
+            if(this.complete) $(this).load();
+          });
+
+          $("<img/>")
+          .attr("src", $(img).attr("src"))
+          .load(function() {
+            item.imgWidth = this.width;
+            item.imgHeight = this.height;
+
+            $wall.loadedImages++;
+            col.arrangeItems()
+            if($wall.loadedImages == $wall.allImages.length){
+              $wall.updateHeight();
+              if($wall.items.length > ($wall.cols.length * 2)  && options.shareItems){
+                $wall.equalizeItems();
+              }
+            }
+            col.arrangeItems()
+          });
+
 		    })
 	    })
     }
-
-    $(window).on('resize',$wall.init)
 
     if(options.animation){
       $wall.items.css('transition',options.transition)
@@ -161,17 +192,28 @@
     }
 
     $col.updateHeight = function(){
-      $col.height = 0;
-      $col.items.map(function(i,item){ $col.height += item.element.height() });
+      $col.height = parseInt($wall.container.css('paddingTop')) + ($col.marginY * $col.items.length);
+      if(options.justImages){
+        $col.items.map(function(i,item){ $col.height += item.imgHeight });
+      }else {
+        $col.items.map(function(i,item){ $col.height += item.element.height() });
+      }
       $wall.updateHeight();
     }
 
     $col.arrangeItems = function(){
       $.each($col.items,function(itemIndex,el){
         var itemsAbove = $col.items.slice(0, itemIndex),
-            topPx = itemIndex * $col.marginY;
+            topPx = itemIndex * $col.marginY + parseInt($wall.container.css('paddingTop'));
 
-        itemsAbove.each(function(i,item){ topPx+=item.element.height() })
+        itemsAbove.each(function(i,item){
+          if(options.justImages){
+            topPx+= ( $col.width * item.imgHeight ) / item.imgWidth
+          } else {
+            topPx+=item.element.height()
+          }
+        })
+
         el.element.css({
           position: 'absolute',
           width: $col.width,
@@ -187,9 +229,10 @@
 
   var Item = function(el,depth){
     var $item = this;
-
     $item.element = $(el);
     $item.depth = depth;
+    $item.imgHeight = $(el).height();
+    $item.imgWidth = $(el).width();
   }
 
 })(jQuery)
